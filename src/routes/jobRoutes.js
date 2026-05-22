@@ -1,14 +1,34 @@
+// src/routes/jobRoutes.js
 const express = require('express');
 const router = express.Router();
 const jobController = require('../controllers/jobController');
 
-router.get('/', jobController.getHomePage);
-router.post('/auth', jobController.handleAuth);
-router.post('/jobs', jobController.createJob);
+const { requireAuth } = require('../middlewares/authMiddleware');
 
-// Routes mới cho Xóa và Sửa
-router.post('/jobs/delete/:id', jobController.deleteJob);
-router.post('/jobs/update/:id', jobController.updateJobStatus);
-// Thêm dòng này vào jobRoutes.js
-router.post('/jobs/update-info/:id', jobController.updateJobInfo);
+
+
+router.get('/', requireAuth, jobController.getHomePage);
+
+router.get('/auth/login', jobController.getLoginPage);
+router.get('/auth/register', jobController.getRegisterPage);
+
+router.post('/auth/login', jobController.handleAuth);
+router.post('/auth/register', jobController.handleAuth);
+
+
+router.post('/auth', jobController.handleAuth); 
+
+
+router.post('/jobs', requireAuth, jobController.createJob);
+router.post('/jobs/create', requireAuth, jobController.createJob);
+
+router.post('/jobs/update-status/:id', requireAuth, jobController.updateJobStatus);
+
+
+router.post('/jobs/update-info/:id', requireAuth, jobController.updateJobInfo);
+
+
+
+router.get('/jobs/delete/:id', requireAuth, jobController.deleteJob);
+
 module.exports = router;

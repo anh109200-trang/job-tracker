@@ -1,12 +1,17 @@
+// src/routes/authRoutes.js
 const express = require('express');
 const router = express.Router();
+
+// 1. Phải import ĐẦY ĐỦ cả 2 controller ở đầu file
 const authController = require('../controllers/authController');
+const jobController = require('../controllers/jobController'); 
 
-// Khi người dùng truy cập http://localhost:3000/auth bằng trình duyệt
-router.get('/', authController.getHomePage); 
+// 2. Định tuyến cho trang chủ ứng dụng
+router.get('/', jobController.getHomePage);
+router.post('/', jobController.handleAuth);
 
-// KHI NGƯỜI DÙNG NHẤN NÚT (POST dữ liệu)
-// Nếu form của bạn là <form action="/auth" method="POST"> thì code dưới đây là đúng
-router.post('/', authController.handleAuth); 
+// 3. SỬA LẠI ĐƯỜNG DẪN: Bỏ chữ '/auth' đi vì đã có prefix từ app.js
+router.get('/login', jobController.getLoginPage);
+router.get('/register', jobController.getRegisterPage);
 
 module.exports = router;

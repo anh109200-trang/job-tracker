@@ -4,9 +4,9 @@ const JobSchema = new mongoose.Schema({
     title: { type: String, required: true },
     company: { type: String, required: true },
     // THÊM CÁC TRƯỜNG MỚI Ở ĐÂY:
-    applicantName: { type: String }, // Họ tên người ứng tuyển
-    phone: { type: String },         // Số điện thoại
-    address: { type: String },       // Địa chỉ
+    applicantName: { type: String }, 
+    phone: { type: String },       
+    address: { type: String },      
     
     status: { 
         type: String, 

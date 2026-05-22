@@ -1,69 +1,101 @@
 const Job = require('../models/Job');
 
-// Biến tạm để quản lý login
+// Nhúng các file render giao diện JS thuần kết hợp Tailwind
+const renderLayout = require('../views/layout');
+const renderIndex = require('../views/index');
+const renderLogin = require('../views/login');
+const renderRegister = require('../views/register');
+
 let users = []; 
 let currentUser = null; 
 
-// 1. Xử lý Authentication (Đăng ký, Đăng nhập, Đăng xuất)
+
+
 exports.handleAuth = (req, res) => {
+    // Lấy dữ liệu từ Form gửi lên
     const { action, username, password, email, re_password } = req.body;
+    
+    // Đồng bộ định danh: Form đăng nhập dùng ô "Địa chỉ Email" (name="email") hoặc 'username'
+    const loginIdentifier = email || username;
 
     if (action === 'register') {
         if (password !== re_password) {
-            console.log("Mật khẩu không khớp!");
-            return res.redirect('/');
+            console.log("❌ Mật khẩu nhập lại không khớp!");
+            return res.redirect('/auth/register');
         }
-        users.push({ username, password, email });
-        currentUser = username; 
-        console.log("Đăng ký mới thành công:", username);
+        
+        // MẸO: Nếu lúc đăng ký họ không nhập username, lấy luôn phần chữ trước dấu @ của Email làm Username
+        const finalUsername = username || (email ? email.split('@')[0] : 'User');
 
-    } else if (action === 'login') {
-        const user = users.find(u => u.username === username && u.password === password);
+        // Lưu thông tin đăng ký mới vào mảng tạm
+        users.push({ 
+            username: finalUsername, 
+            password: password, 
+            email: email 
+        });
+        
+        console.log(`📝 Đăng ký thành công! Username: ${finalUsername} | Email: ${email}`);
+        return res.redirect('/auth/login'); 
+
+    } else if (action === 'login' || !action) { 
+        console.log(`🔑 Đang thử đăng nhập với định danh: ${loginIdentifier}`);
+
+        // Tìm tài khoản khớp với Email HOẶC Username và đúng Mật khẩu
+        const user = users.find(u => 
+            (u.email === loginIdentifier || u.username === loginIdentifier) && u.password === password
+        );
+        
         if (user) {
-            currentUser = username;
-            console.log("Đăng nhập thành công:", username);
+            // Đăng nhập thành công -> Lưu tên hiển thị (Chắc chắn không bị undefined)
+            currentUser = user.username; 
+            console.log("✅ Đăng nhập thành công, chào mừng:", currentUser);
+            return res.redirect('/'); // Điều hướng về trang chủ chính
         } else {
-            console.log("Sai tài khoản hoặc mật khẩu!");
+            console.log("❌ Đăng nhập thất bại: Sai tài khoản, email hoặc mật khẩu!");
+            currentUser = null; 
+            return res.redirect('/auth/login'); // Load lại trang đăng nhập
         }
+        
     } else if (action === 'logout') {
         currentUser = null;
+        console.log("🔒 Đã đăng xuất tài khoản.");
+        return res.redirect('/auth/login');
     }
+
+    // Phòng hờ treo trang
     res.redirect('/');
 };
 
-// 2. Hiển thị trang chủ (READ)
 exports.getHomePage = async (req, res) => {
     try {
-        // 1. Cấu hình phân trang
-        const resPerPage = 5; // Mỗi trang hiển thị 5 bản ghi
-        const page = parseInt(req.query.page) || 1; // Lấy trang hiện tại từ URL (?page=1), mặc định là 1
+        const resPerPage = 5; 
+        const page = parseInt(req.query.page) || 1; 
 
         let userJobs = [];
         let totalJobs = 0;
 
+        // Nếu đã có người dùng đăng nhập, tìm kiếm công việc thuộc sở hữu của người đó
         if (currentUser) {
-            // 2. Đếm tổng số job của người dùng này để tính tổng số trang
             totalJobs = await Job.countDocuments({ owner: currentUser });
-
-            // 3. Lấy dữ liệu theo trang
             userJobs = await Job.find({ owner: currentUser })
                 .sort({ createdAt: -1 })
-                .skip((resPerPage * page) - resPerPage) // Bỏ qua các bản ghi của trang trước
-                .limit(resPerPage); // Giới hạn số lượng bản ghi mỗi trang
+                .skip((resPerPage * page) - resPerPage) 
+                .limit(resPerPage); 
         }
         
-        res.render('index', { 
-            jobs: userJobs, 
-            user: currentUser,
-            currentPage: page,
-            pages: Math.ceil(totalJobs / resPerPage) // Tính tổng số trang
-        });
+        // Tạo chuỗi HTML giao diện danh sách bảng
+        const indexContent = renderIndex(userJobs, page, Math.ceil(totalJobs / resPerPage));
+        
+        // TRUYỀN BIẾN currentUser VÀO THAM SỐ THỨ HAI CỦA LAYOUT
+        const fullHtml = renderLayout(indexContent, currentUser);
+        
+        res.send(fullHtml);
+
     } catch (err) {
-        console.error("Lỗi phân trang:", err);
+        console.error("Lỗi tải trang chủ:", err);
         res.status(500).send("Lỗi server");
     }
 };
-
 // 3. Thêm công việc mới (CREATE)
 exports.createJob = async (req, res) => {
     const { title, company, applicantName, phone, address } = req.body; 
@@ -114,19 +146,55 @@ exports.updateJobStatus = async (req, res) => {
 };
 
 // 6. Cập nhật THÔNG TIN CHI TIẾT (Dành cho Modal sửa thông tin)
+// Thêm hàm này vào file src/controllers/jobController.js
 exports.updateJobInfo = async (req, res) => {
     try {
-        const { id } = req.params;
-        const { title, company, applicantName, phone, address } = req.body;
-        
-        await Job.findByIdAndUpdate(id, { 
-            title, company, applicantName, phone, address 
+        const jobId = req.params.id;
+        const { title, company, candidateName, phone, location } = req.body;
+
+        // Tiến hành cập nhật thông tin mới vào MongoDB theo ID
+        await Job.findByIdAndUpdate(jobId, {
+            title: title,
+            company: company,
+            candidateName: candidateName,
+            phone: phone,
+            location: location
         });
-        
-        console.log("Đã cập nhật thông tin chi tiết!");
-        res.redirect('/');
+
+        console.log(`✏️ Đã cập nhật thông tin công việc ID: ${jobId}`);
+        res.redirect('/'); // Cập nhật xong đưa người dùng quay lại trang chủ luôn
+
     } catch (err) {
-        console.error(err);
-        res.redirect('/');
+        console.error("❌ Lỗi khi cập nhật thông tin công việc:", err);
+        res.status(500).send("Lỗi server không thể cập nhật dữ liệu.");
+    }
+};
+
+// --- BỔ SUNG ROUTE GET CHO TRANG LOGIN VÀ REGISTER ---
+exports.getLoginPage = (req, res) => {
+    if (currentUser) return res.redirect('/');
+    const loginContent = renderLogin();
+    res.send(renderLayout(loginContent, null));
+};
+
+exports.getRegisterPage = (req, res) => {
+    if (currentUser) return res.redirect('/');
+    const registerContent = renderRegister();
+    res.send(renderLayout(registerContent, null));
+};
+
+module.exports = {
+    getHomePage: exports.getHomePage,
+    getLoginPage: exports.getLoginPage,
+    getRegisterPage: exports.getRegisterPage,
+    handleAuth: exports.handleAuth,
+    createJob: exports.createJob,
+    updateJobStatus: exports.updateJobStatus,
+    updateJobInfo: exports.updateJobInfo,
+    deleteJob: exports.deleteJob,
+    
+    // Hàm getter để lấy giá trị thực tế của currentUser bất cứ lúc nào file khác cần gọi
+    get currentUser() {
+        return currentUser;
     }
 };
